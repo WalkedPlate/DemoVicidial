@@ -148,7 +148,7 @@ function logActivity(message) {
 
 function testVicidialConnection() {
     logActivity('Probando conexión con Vicidial...');
-    
+
     fetch('/test_vicidial_connection')
         .then(response => response.json())
         .then(data => {
@@ -178,7 +178,7 @@ function testVicidialConnection() {
 
 document.getElementById('create-agent-form').addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
     const formData = {
         name: document.getElementById('agent_name').value,
         email: document.getElementById('agent_email').value,

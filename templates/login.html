@@ -1,10 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Login - CRM Vicidial{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="text-center">CRM Vicidial Integration</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="test@example.com" required>
+                        <small class="form-text text-muted">Usa: test@example.com para probar</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Iniciar Sesión</button>
+                </form>
+                
+                <div class="mt-4">
+                    <h6>Proyecto de Prueba - Integración Vicidial</h6>
+                    <ul class="small text-muted">
+                        <li>Crear agentes en el CRM</li>
+                        <li>Sincronizar con Vicidial</li>
+                        <li>Login/Logout de agentes</li>
+                        <li>Monitoreo de estados</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
