@@ -9,18 +9,21 @@
     </div>
 </div>
 
-<!-- Test de conexión -->
+<!-- Test de conexión AMI -->
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card">
             <div class="card-header">
-                <h5>Test de Conexión Vicidial</h5>
+                <h5>Test de Conexión AMI</h5>
             </div>
             <div class="card-body">
-                <button class="btn btn-primary" onclick="testVicidialConnection()">
-                    Probar Conexión
+                <button class="btn btn-success" onclick="testAMIConnection()">
+                    Probar AMI
                 </button>
-                <div id="connection-result" class="mt-3"></div>
+                <button class="btn btn-info" onclick="getQueueStatus()">
+                    Estado de Cola
+                </button>
+                <div id="ami-result" class="mt-3"></div>
             </div>
         </div>
     </div>
@@ -96,18 +99,21 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-primary btn-sm" onclick="agentLogin({{ agent.id }})">
-                                            Login
-                                        </button>
-                                        <button class="btn btn-warning btn-sm" onclick="agentLogout({{ agent.id }})">
-                                            Logout
-                                        </button>
-                                        <button class="btn btn-info btn-sm" onclick="getAgentStatus({{ agent.id }})">
-                                            Estado
-                                        </button>
-                                        <a href="{{ url_for('agent_panel', user_id=agent.id) }}" class="btn btn-secondary btn-sm">
-                                            Panel
+                                        <a href="{{ url_for('agent_view', agent_id=agent.id) }}" class="btn btn-success btn-sm">
+                                            🎧 Vista Agente
                                         </a>
+                                        <button class="btn btn-primary btn-sm" onclick="amiAgentLogin({{ agent.id }})">
+                                            AMI Login
+                                        </button>
+                                        <button class="btn btn-warning btn-sm" onclick="amiAgentLogout({{ agent.id }})">
+                                            AMI Logout
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm" onclick="amiPauseAgent({{ agent.id }})">
+                                            Pausar
+                                        </button>
+                                        <button class="btn btn-info btn-sm" onclick="amiUnpauseAgent({{ agent.id }})">
+                                            Listo
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -146,33 +152,57 @@ function logActivity(message) {
     logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-function testVicidialConnection() {
-    logActivity('Probando conexión con Vicidial...');
+function testAMIConnection() {
+    logActivity('Probando conexión AMI...');
 
-    fetch('/test_vicidial_connection')
+    fetch('/test_ami_connection')
         .then(response => response.json())
         .then(data => {
-            const resultDiv = document.getElementById('connection-result');
+            const resultDiv = document.getElementById('ami-result');
             if (data.success) {
                 resultDiv.innerHTML = `
                     <div class="alert alert-success">
-                        <strong>✓ Conexión exitosa!</strong><br>
-                        Campañas disponibles: <pre>${data.campaigns}</pre>
+                        <strong>✓ AMI Funcionando!</strong><br>
+                        ${data.message}<br>
+                        <small>${data.response}</small>
                     </div>
                 `;
-                logActivity('✓ Conexión exitosa con Vicidial');
+                logActivity('✓ AMI conectado correctamente');
             } else {
                 resultDiv.innerHTML = `
                     <div class="alert alert-danger">
-                        <strong>✗ Error de conexión:</strong><br>
+                        <strong>✗ Error AMI:</strong><br>
                         ${data.message}
                     </div>
                 `;
-                logActivity('✗ Error de conexión: ' + data.message);
+                logActivity('✗ Error AMI: ' + data.message);
             }
-        })
-        .catch(error => {
-            logActivity('✗ Error de red: ' + error.message);
+        });
+}
+
+function getQueueStatus() {
+    logActivity('Consultando estado de cola DEMOIN...');
+
+    fetch('/ami_queue_status')
+        .then(response => response.json())
+        .then(data => {
+            const resultDiv = document.getElementById('ami-result');
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>📊 Estado Cola DEMOIN:</strong><br>
+                        <pre>${data.queue_status}</pre>
+                    </div>
+                `;
+                logActivity('✓ Estado de cola obtenido');
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>✗ Error:</strong> ${data.message}
+                    </div>
+                `;
+                logActivity('✗ Error consultando cola: ' + data.message);
+            }
         });
 }
 
@@ -185,11 +215,12 @@ document.getElementById('create-agent-form').addEventListener('submit', function
         vicidial_user: document.getElementById('vicidial_user').value,
         vicidial_user_pass: document.getElementById('vicidial_user_pass').value,
         vicidial_phone_login: document.getElementById('vicidial_phone_login').value,
-        vicidial_phone_pass: document.getElementById('vicidial_phone_pass').value
+        vicidial_phone_pass: document.getElementById('vicidial_phone_pass').value,
+        vicidial_user_group: 'ADMIN'  // Usar ADMIN por defecto
     };
-    
+
     logActivity('Creando agente: ' + formData.name);
-    
+
     fetch('/create_agent', {
         method: 'POST',
         headers: {
@@ -215,89 +246,89 @@ document.getElementById('create-agent-form').addEventListener('submit', function
     });
 });
 
-function agentLogin(userId) {
-    const campaign = prompt('Ingresa la campaña (opcional):');
-    logActivity('Intentando login para agente ID: ' + userId);
-    
-    fetch('/agent_login', {
+function amiAgentLogin(userId) {
+    logActivity('Intentando AMI login para agente ID: ' + userId);
+
+    fetch('/ami_agent_login', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            user_id: userId,
-            campaign: campaign
-        })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showAlert('Login exitoso en Vicidial', 'success');
-            logActivity('✓ Login exitoso para agente ID: ' + userId);
+            showAlert('✓ AMI Login exitoso', 'success');
+            logActivity('✓ AMI Login exitoso para agente ID: ' + userId);
             location.reload();
         } else {
-            showAlert('Error en login: ' + data.message, 'danger');
-            logActivity('✗ Error en login: ' + data.message);
+            showAlert('✗ Error AMI Login: ' + data.message, 'danger');
+            logActivity('✗ Error AMI Login: ' + data.message);
         }
-    })
-    .catch(error => {
-        showAlert('Error: ' + error.message, 'danger');
-        logActivity('✗ Error: ' + error.message);
     });
 }
 
-function agentLogout(userId) {
-    logActivity('Intentando logout para agente ID: ' + userId);
-    
-    fetch('/agent_logout', {
+function amiAgentLogout(userId) {
+    logActivity('Intentando AMI logout para agente ID: ' + userId);
+
+    fetch('/ami_agent_logout', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            user_id: userId
-        })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showAlert('Logout exitoso', 'success');
-            logActivity('✓ Logout exitoso para agente ID: ' + userId);
+            showAlert('✓ AMI Logout exitoso', 'success');
+            logActivity('✓ AMI Logout exitoso para agente ID: ' + userId);
             location.reload();
         } else {
-            showAlert('Error en logout: ' + data.message, 'danger');
-            logActivity('✗ Error en logout: ' + data.message);
+            showAlert('✗ Error AMI Logout: ' + data.message, 'danger');
+            logActivity('✗ Error AMI Logout: ' + data.message);
         }
-    })
-    .catch(error => {
-        showAlert('Error: ' + error.message, 'danger');
-        logActivity('✗ Error: ' + error.message);
     });
 }
 
-function getAgentStatus(userId) {
-    logActivity('Consultando estado del agente ID: ' + userId);
-    
-    fetch('/get_agent_status/' + userId)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const statusInfo = `
-                    Estado Local: ${data.local_status.agent_status}
-                    Logueado: ${data.local_status.is_logged_in ? 'Sí' : 'No'}
-                    Estado Vicidial: ${data.vicidial_status}
-                `;
-                alert(statusInfo);
-                logActivity('✓ Estado consultado para agente ID: ' + userId);
-            } else {
-                showAlert('Error consultando estado: ' + data.message, 'danger');
-                logActivity('✗ Error consultando estado: ' + data.message);
-            }
-        })
-        .catch(error => {
-            showAlert('Error: ' + error.message, 'danger');
-            logActivity('✗ Error: ' + error.message);
-        });
+function amiPauseAgent(userId) {
+    const reason = prompt('Motivo de pausa:', 'Break') || 'Break';
+    logActivity('Pausando agente ID: ' + userId + ' - Motivo: ' + reason);
+
+    fetch('/ami_pause_agent', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId, reason: reason})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('⏸️ Agente pausado: ' + reason, 'warning');
+            logActivity('✓ Agente pausado: ' + reason);
+            location.reload();
+        } else {
+            showAlert('✗ Error pausando: ' + data.message, 'danger');
+            logActivity('✗ Error pausando: ' + data.message);
+        }
+    });
+}
+
+function amiUnpauseAgent(userId) {
+    logActivity('Despausando agente ID: ' + userId);
+
+    fetch('/ami_unpause_agent', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('▶️ Agente listo para llamadas', 'success');
+            logActivity('✓ Agente despausado y listo');
+            location.reload();
+        } else {
+            showAlert('✗ Error despausando: ' + data.message, 'danger');
+            logActivity('✗ Error despausando: ' + data.message);
+        }
+    });
 }
 
 // Auto-refrescar cada 30 segundos

@@ -1,24 +1,30 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
 import json
 import pymysql
+import threading
 from config import Config
 from vicidial_api import VicidialAPI
 from vicidial_ami import VicidialAMI
+from vicidial_realtime import VicidialRealtime
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 # Configurar SQLAlchemy
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crm_test.db'  # Para pruebas usamos SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crm_test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# Configurar SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Instancias globales
 vicidial_api = VicidialAPI()
 vicidial_ami = VicidialAMI()
-
+vicidial_realtime = VicidialRealtime(socketio)
 
 def init_ami():
     """Inicializar conexión AMI"""
@@ -29,6 +35,18 @@ def init_ami():
         print("❌ Error conectando AMI en Flask")
         return False
 
+def init_realtime():
+    """Inicializar AMI en tiempo real en hilo separado"""
+    def start_realtime():
+        if vicidial_realtime.connect_ami():
+            print("🚀 AMI Tiempo Real iniciado")
+        else:
+            print("❌ Error iniciando AMI Tiempo Real")
+
+    # Ejecutar en hilo separado para no bloquear Flask
+    thread = threading.Thread(target=start_realtime)
+    thread.daemon = True
+    thread.start()
 
 # Modelos de base de datos
 class User(db.Model):
@@ -53,7 +71,6 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-
 class AgentSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -64,12 +81,10 @@ class AgentSession(db.Model):
     phone_login = db.Column(db.String(20))
     status = db.Column(db.String(20), default='ACTIVE')
 
-
 # Rutas
 @app.route('/')
 def index():
     return render_template('login.html')
-
 
 @app.route('/dashboard')
 def dashboard():
@@ -81,12 +96,10 @@ def dashboard():
 
     return render_template('dashboard.html', user=user, agents=agents)
 
-
 @app.route('/agent_panel/<int:user_id>')
 def agent_panel(user_id):
     user = User.query.get_or_404(user_id)
     return render_template('agent_panel.html', user=user)
-
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -101,12 +114,10 @@ def login():
         flash('Usuario no encontrado', 'error')
         return redirect(url_for('index'))
 
-
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
-
 
 @app.route('/create_agent', methods=['POST'])
 def create_agent():
@@ -159,7 +170,6 @@ def create_agent():
             'success': False,
             'message': f'Error al crear agente: {str(e)}'
         }), 500
-
 
 @app.route('/agent_login', methods=['POST'])
 def agent_login():
@@ -214,7 +224,6 @@ def agent_login():
             'message': f'Error: {str(e)}'
         }), 500
 
-
 @app.route('/agent_logout', methods=['POST'])
 def agent_logout():
     try:
@@ -256,7 +265,6 @@ def agent_logout():
             'message': f'Error: {str(e)}'
         }), 500
 
-
 @app.route('/get_agent_status/<int:user_id>')
 def get_agent_status(user_id):
     try:
@@ -282,7 +290,6 @@ def get_agent_status(user_id):
             'message': f'Error: {str(e)}'
         })
 
-
 @app.route('/test_vicidial_connection')
 def test_vicidial_connection():
     """Probar conexión con Vicidial"""
@@ -302,7 +309,6 @@ def test_vicidial_connection():
             'message': f'Error de conexión: {str(e)}'
         })
 
-
 # Crear tablas al iniciar
 def create_tables():
     with app.app_context():
@@ -317,7 +323,6 @@ def create_tables():
             db.session.add(test_user)
             db.session.commit()
             print("Usuario de prueba creado: test@example.com")
-
 
 @app.route('/ami_agent_login', methods=['POST'])
 def ami_agent_login():
@@ -352,7 +357,6 @@ def ami_agent_login():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
 @app.route('/ami_agent_logout', methods=['POST'])
 def ami_agent_logout():
     try:
@@ -384,7 +388,6 @@ def ami_agent_logout():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
 @app.route('/ami_pause_agent', methods=['POST'])
 def ami_pause_agent():
     try:
@@ -412,7 +415,6 @@ def ami_pause_agent():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
 @app.route('/ami_unpause_agent', methods=['POST'])
 def ami_unpause_agent():
     try:
@@ -439,7 +441,6 @@ def ami_unpause_agent():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
 @app.route('/ami_queue_status')
 def ami_queue_status():
     try:
@@ -450,7 +451,6 @@ def ami_queue_status():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
 
 @app.route('/test_ami_connection')
 def test_ami_connection():
@@ -470,7 +470,6 @@ def test_ami_connection():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error AMI: {str(e)}'})
 
-
 @app.route('/debug_queues')
 def debug_queues():
     try:
@@ -481,7 +480,6 @@ def debug_queues():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
 
 @app.route('/debug_sip_peer/<extension>')
 def debug_sip_peer(extension):
@@ -498,12 +496,10 @@ def debug_sip_peer(extension):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
 @app.route('/agent_view/<int:agent_id>')
 def agent_view(agent_id):
     user = User.query.get_or_404(agent_id)
     return render_template('agent_view.html', agent=user)
-
 
 @app.route('/agent_calls/<int:agent_id>')
 def agent_calls(agent_id):
@@ -523,12 +519,13 @@ def agent_calls(agent_id):
         with connection.cursor() as cursor:
             # Obtener llamadas del agente
             cursor.execute("""
-                           SELECT uniqueid, lead_id, status, campaign_id, phone_number, start_time
-                           FROM vicidial_auto_calls
-                           WHERE agent_user = %s
-                             AND status IN ('LIVE', 'QUEUE', 'INCALL', 'RING')
-                           ORDER BY start_time DESC LIMIT 1
-                           """, (user.vicidial_user,))
+                SELECT uniqueid, lead_id, status, campaign_id, phone_number, start_time
+                FROM vicidial_auto_calls 
+                WHERE agent_user = %s 
+                AND status IN ('LIVE', 'QUEUE', 'INCALL', 'RING')
+                ORDER BY start_time DESC
+                LIMIT 1
+            """, (user.vicidial_user,))
 
             call_data = cursor.fetchone()
             calls = []
@@ -536,10 +533,10 @@ def agent_calls(agent_id):
             if call_data:
                 # Obtener información del cliente
                 cursor.execute("""
-                               SELECT first_name, last_name, city, state, address1
-                               FROM vicidial_list
-                               WHERE lead_id = %s
-                               """, (call_data[1],))
+                    SELECT first_name, last_name, city, state, address1
+                    FROM vicidial_list 
+                    WHERE lead_id = %s
+                """, (call_data[1],))
 
                 customer_data = cursor.fetchone()
 
@@ -560,10 +557,9 @@ def agent_calls(agent_id):
 
             # Obtener estado del agente
             cursor.execute("""
-                           SELECT status
-                           FROM vicidial_live_agents
-                           WHERE user = %s
-                           """, (user.vicidial_user,))
+                SELECT status FROM vicidial_live_agents 
+                WHERE user = %s
+            """, (user.vicidial_user,))
 
             agent_status_result = cursor.fetchone()
             agent_status = agent_status_result[0] if agent_status_result else 'LOGOUT'
@@ -579,7 +575,6 @@ def agent_calls(agent_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
 @app.route('/agent_pause', methods=['POST'])
 def agent_pause():
     try:
@@ -588,7 +583,6 @@ def agent_pause():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
 
 @app.route('/agent_unpause', methods=['POST'])
 def agent_unpause():
@@ -599,8 +593,353 @@ def agent_unpause():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/vicidial_agent_login', methods=['POST'])
+def vicidial_agent_login():
+    """Login completo del agente en Vicidial usando la base de datos directamente"""
+    try:
+        data = request.get_json()
+        agent_id = data['agent_id']
+        user = User.query.get_or_404(agent_id)
+
+        # Conectar a BD Vicidial
+        connection = pymysql.connect(
+            host='195.26.249.9',
+            port=3306,
+            user='custom',
+            password='ldb0LBeham5VWkJ1shCbLNJIdX4',
+            database='VIbdz0BWDgJBaoq',
+            charset='utf8mb4'
+        )
+
+        with connection.cursor() as cursor:
+            # 1. Verificar si el agente ya está logueado
+            cursor.execute("""
+                SELECT user FROM vicidial_live_agents 
+                WHERE user = %s
+            """, (user.vicidial_user,))
+
+            if cursor.fetchone():
+                return jsonify({
+                    'success': False,
+                    'message': 'Agente ya está logueado'
+                })
+
+            # 2. Insertar agente en vicidial_live_agents
+            cursor.execute("""
+                INSERT INTO vicidial_live_agents 
+                (user, server_ip, conf_exten, status, lead_id, campaign_id,
+                 uniqueid, callerid, channel, random_id, last_call_time,
+                 last_call_finish, closer_campaigns, call_server_ip,
+                 user_level, comments, calls_today, pause_code,
+                 last_state_change, agent_log_id)
+                VALUES 
+                (%s, '195.26.249.9', %s, 'READY', 0, 'DEMOIN', 
+                 '', '', '', FLOOR(RAND() * 10000000000), NOW(), 
+                 NOW(), '', '195.26.249.9', 
+                 %s, '', 0, '', 
+                 NOW(), 0)
+            """, (
+                user.vicidial_user,
+                user.vicidial_phone_login,
+                user.vicidial_user_level or 1
+            ))
+
+            # 3. Registrar en vicidial_agent_log
+            cursor.execute("""
+                INSERT INTO vicidial_agent_log 
+                (user, server_ip, event_time, campaign_id, pause_epoch,
+                 pause_sec, wait_epoch, wait_sec, talk_epoch, talk_sec,
+                 dispo_epoch, dispo_sec, status, lead_id, phone_number,
+                 user_group, comments, sub_status)
+                VALUES 
+                (%s, '195.26.249.9', NOW(), 'DEMOIN', 0,
+                 0, 0, 0, 0, 0,
+                 0, 0, 'LOGIN', 0, '',
+                 %s, 'CRM LOGIN', '')
+            """, (
+                user.vicidial_user,
+                user.vicidial_user_group or 'ADMIN'
+            ))
+
+            connection.commit()
+
+        connection.close()
+
+        # 4. Actualizar estado local
+        user.is_logged_in_vicidial = True
+        user.agent_status = 'READY'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Agente {user.vicidial_user} logueado en DEMOIN como READY'
+        })
+
+    except Exception as e:
+        print(f"Error en vicidial_agent_login: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+@app.route('/vicidial_agent_logout', methods=['POST'])
+def vicidial_agent_logout():
+    """Logout completo del agente de Vicidial"""
+    try:
+        data = request.get_json()
+        agent_id = data['agent_id']
+        user = User.query.get_or_404(agent_id)
+
+        # Conectar a BD Vicidial
+        connection = pymysql.connect(
+            host='195.26.249.9',
+            port=3306,
+            user='custom',
+            password='ldb0LBeham5VWkJ1shCbLNJIdX4',
+            database='VIbdz0BWDgJBaoq',
+            charset='utf8mb4'
+        )
+
+        with connection.cursor() as cursor:
+            # 1. Eliminar de vicidial_live_agents
+            cursor.execute("""
+                DELETE FROM vicidial_live_agents 
+                WHERE user = %s
+            """, (user.vicidial_user,))
+
+            # 2. Registrar logout en vicidial_agent_log
+            cursor.execute("""
+                INSERT INTO vicidial_agent_log 
+                (user, server_ip, event_time, campaign_id, pause_epoch, 
+                 pause_sec, wait_epoch, wait_sec, talk_epoch, talk_sec, 
+                 dispo_epoch, dispo_sec, status, lead_id, phone_number, 
+                 user_group, comments, sub_status)
+                VALUES 
+                (%s, '195.26.249.9', NOW(), 'DEMOIN', 0,
+                 0, 0, 0, 0, 0,
+                 0, 0, 'LOGOUT', 0, '',
+                 %s, 'CRM LOGOUT', '')
+            """, (
+                user.vicidial_user,
+                user.vicidial_user_group or 'ADMIN'
+            ))
+
+            connection.commit()
+
+        connection.close()
+
+        # 3. Actualizar estado local
+        user.is_logged_in_vicidial = False
+        user.agent_status = 'LOGOUT'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Agente {user.vicidial_user} deslogueado exitosamente'
+        })
+
+    except Exception as e:
+        print(f"Error en vicidial_agent_logout: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+@app.route('/vicidial_agent_pause', methods=['POST'])
+def vicidial_agent_pause():
+    """Pausar agente en Vicidial"""
+    try:
+        data = request.get_json()
+        agent_id = data['agent_id']
+        reason = data.get('reason', 'BREAK')
+        user = User.query.get_or_404(agent_id)
+
+        # Conectar a BD Vicidial
+        connection = pymysql.connect(
+            host='195.26.249.9',
+            port=3306,
+            user='custom',
+            password='ldb0LBeham5VWkJ1shCbLNJIdX4',
+            database='VIbdz0BWDgJBaoq',
+            charset='utf8mb4'
+        )
+
+        with connection.cursor() as cursor:
+            # Actualizar estado a PAUSED
+            cursor.execute("""
+                UPDATE vicidial_live_agents 
+                SET status = 'PAUSED', pause_code = %s, last_state_change = NOW()
+                WHERE user = %s
+            """, (reason, user.vicidial_user))
+
+            connection.commit()
+
+        connection.close()
+
+        # Actualizar estado local
+        user.agent_status = 'PAUSED'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Agente pausado: {reason}'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+@app.route('/vicidial_agent_unpause', methods=['POST'])
+def vicidial_agent_unpause():
+    """Despausar agente en Vicidial"""
+    try:
+        data = request.get_json()
+        agent_id = data['agent_id']
+        user = User.query.get_or_404(agent_id)
+
+        # Conectar a BD Vicidial
+        connection = pymysql.connect(
+            host='195.26.249.9',
+            port=3306,
+            user='custom',
+            password='ldb0LBeham5VWkJ1shCbLNJIdX4',
+            database='VIbdz0BWDgJBaoq',
+            charset='utf8mb4'
+        )
+
+        with connection.cursor() as cursor:
+            # Actualizar estado a READY
+            cursor.execute("""
+                UPDATE vicidial_live_agents 
+                SET status = 'READY', pause_code = '', last_state_change = NOW()
+                WHERE user = %s
+            """, (user.vicidial_user,))
+
+            connection.commit()
+
+        connection.close()
+
+        # Actualizar estado local
+        user.agent_status = 'READY'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Agente listo para recibir llamadas'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
+
+@app.route('/start_recording', methods=['POST'])
+def start_recording():
+    try:
+        data = request.get_json()
+        channel = data['channel']
+        agent_id = data.get('agent_id', 'unknown')
+
+        # Crear nombre único para grabación
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"manual_{agent_id}_{timestamp}"
+
+        result = vicidial_realtime.start_recording(channel, filename)
+
+        # Enviar evento WebSocket
+        socketio.emit('recording_started', {
+            'channel': channel,
+            'filename': filename,
+            'result': result
+        })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+@app.route('/stop_recording', methods=['POST'])
+def stop_recording():
+    try:
+        data = request.get_json()
+        channel = data['channel']
+
+        result = vicidial_realtime.stop_recording(channel)
+
+        # Enviar evento WebSocket
+        socketio.emit('recording_stopped', {
+            'channel': channel,
+            'result': result
+        })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+@app.route('/transfer_call', methods=['POST'])
+def transfer_call():
+    try:
+        data = request.get_json()
+        channel = data['channel']
+        target_extension = data['target_extension']
+
+        result = vicidial_realtime.transfer_call(channel, target_extension)
+
+        # Enviar evento WebSocket
+        socketio.emit('call_transferred', {
+            'channel': channel,
+            'target': target_extension,
+            'result': result
+        })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+@app.route('/hangup_call', methods=['POST'])
+def hangup_call():
+    try:
+        data = request.get_json()
+        channel = data['channel']
+
+        result = vicidial_realtime.hangup_call(channel)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+
+# Eventos WebSocket
+@socketio.on('connect')
+def on_connect():
+    print(f"🔌 Cliente WebSocket conectado")
+
+@socketio.on('disconnect')
+def on_disconnect():
+    print(f"🔌 Cliente WebSocket desconectado")
+
+@socketio.on('join_agent')
+def on_join_agent(data):
+    """Agente se une a su sala específica para recibir eventos"""
+    extension = data['extension']
+    join_room(f'agent_{extension}')
+    emit('joined', {'room': f'agent_{extension}'})
+    print(f"👤 Agente {extension} se unió a su sala")
+
+@socketio.on('leave_agent')
+def on_leave_agent(data):
+    """Agente sale de su sala"""
+    extension = data['extension']
+    leave_room(f'agent_{extension}')
+    print(f"👤 Agente {extension} salió de su sala")
 
 if __name__ == '__main__':
     create_tables()  # Llamar aquí
     init_ami()  # Inicializar AMI
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    init_realtime()  # Inicializar AMI tiempo real
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
