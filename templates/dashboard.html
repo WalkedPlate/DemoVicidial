@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CRM Vicidial{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>Dashboard CRM - Integración Vicidial</h2>
+    </div>
+</div>
+
+<!-- Test de conexión -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Test de Conexión Vicidial</h5>
+            </div>
+            <div class="card-body">
+                <button class="btn btn-primary" onclick="testVicidialConnection()">
+                    Probar Conexión
+                </button>
+                <div id="connection-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Crear Agente -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Crear Nuevo Agente</h5>
+            </div>
+            <div class="card-body">
+                <form id="create-agent-form">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="agent_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="agent_email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Usuario Vicidial</label>
+                        <input type="text" class="form-control" id="vicidial_user" placeholder="ej: agente001" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password Vicidial</label>
+                        <input type="password" class="form-control" id="vicidial_user_pass" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Teléfono/Extensión</label>
+                        <input type="text" class="form-control" id="vicidial_phone_login" placeholder="ej: 1001" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password Teléfono</label>
+                        <input type="password" class="form-control" id="vicidial_phone_pass" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Crear Agente</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Agentes -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Agentes Existentes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Usuario</th>
+                                <th>Extensión</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for agent in agents %}
+                            <tr>
+                                <td>{{ agent.name }}</td>
+                                <td>{{ agent.vicidial_user }}</td>
+                                <td>{{ agent.vicidial_phone_login }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if agent.is_logged_in_vicidial else 'secondary' }}">
+                                        {{ agent.agent_status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-primary btn-sm" onclick="agentLogin({{ agent.id }})">
+                                            Login
+                                        </button>
+                                        <button class="btn btn-warning btn-sm" onclick="agentLogout({{ agent.id }})">
+                                            Logout
+                                        </button>
+                                        <button class="btn btn-info btn-sm" onclick="getAgentStatus({{ agent.id }})">
+                                            Estado
+                                        </button>
+                                        <a href="{{ url_for('agent_panel', user_id=agent.id) }}" class="btn btn-secondary btn-sm">
+                                            Panel
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs de actividad -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Log de Actividad</h5>
+            </div>
+            <div class="card-body">
+                <div id="activity-log" style="height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px;">
+                    <small class="text-muted">Aquí aparecerán los logs de actividad...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function logActivity(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logDiv = document.getElementById('activity-log');
+    logDiv.innerHTML += `<div><small class="text-muted">[${timestamp}]</small> ${message}</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function testVicidialConnection() {
+    logActivity('Probando conexión con Vicidial...');
+    
+    fetch('/test_vicidial_connection')
+        .then(response => response.json())
+        .then(data => {
+            const resultDiv = document.getElementById('connection-result');
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>✓ Conexión exitosa!</strong><br>
+                        Campañas disponibles: <pre>${data.campaigns}</pre>
+                    </div>
+                `;
+                logActivity('✓ Conexión exitosa con Vicidial');
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>✗ Error de conexión:</strong><br>
+                        ${data.message}
+                    </div>
+                `;
+                logActivity('✗ Error de conexión: ' + data.message);
+            }
+        })
+        .catch(error => {
+            logActivity('✗ Error de red: ' + error.message);
+        });
+}
+
+document.getElementById('create-agent-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        name: document.getElementById('agent_name').value,
+        email: document.getElementById('agent_email').value,
+        vicidial_user: document.getElementById('vicidial_user').value,
+        vicidial_user_pass: document.getElementById('vicidial_user_pass').value,
+        vicidial_phone_login: document.getElementById('vicidial_phone_login').value,
+        vicidial_phone_pass: document.getElementById('vicidial_phone_pass').value
+    };
+    
+    logActivity('Creando agente: ' + formData.name);
+    
+    fetch('/create_agent', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Agente creado exitosamente', 'success');
+            logActivity('✓ Agente creado: ' + formData.name);
+            document.getElementById('create-agent-form').reset();
+            location.reload(); // Recargar para ver el nuevo agente
+        } else {
+            showAlert('Error: ' + data.message, 'danger');
+            logActivity('✗ Error creando agente: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('Error de red: ' + error.message, 'danger');
+        logActivity('✗ Error de red: ' + error.message);
+    });
+});
+
+function agentLogin(userId) {
+    const campaign = prompt('Ingresa la campaña (opcional):');
+    logActivity('Intentando login para agente ID: ' + userId);
+    
+    fetch('/agent_login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            campaign: campaign
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Login exitoso en Vicidial', 'success');
+            logActivity('✓ Login exitoso para agente ID: ' + userId);
+            location.reload();
+        } else {
+            showAlert('Error en login: ' + data.message, 'danger');
+            logActivity('✗ Error en login: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('Error: ' + error.message, 'danger');
+        logActivity('✗ Error: ' + error.message);
+    });
+}
+
+function agentLogout(userId) {
+    logActivity('Intentando logout para agente ID: ' + userId);
+    
+    fetch('/agent_logout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            user_id: userId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Logout exitoso', 'success');
+            logActivity('✓ Logout exitoso para agente ID: ' + userId);
+            location.reload();
+        } else {
+            showAlert('Error en logout: ' + data.message, 'danger');
+            logActivity('✗ Error en logout: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('Error: ' + error.message, 'danger');
+        logActivity('✗ Error: ' + error.message);
+    });
+}
+
+function getAgentStatus(userId) {
+    logActivity('Consultando estado del agente ID: ' + userId);
+    
+    fetch('/get_agent_status/' + userId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const statusInfo = `
+                    Estado Local: ${data.local_status.agent_status}
+                    Logueado: ${data.local_status.is_logged_in ? 'Sí' : 'No'}
+                    Estado Vicidial: ${data.vicidial_status}
+                `;
+                alert(statusInfo);
+                logActivity('✓ Estado consultado para agente ID: ' + userId);
+            } else {
+                showAlert('Error consultando estado: ' + data.message, 'danger');
+                logActivity('✗ Error consultando estado: ' + data.message);
+            }
+        })
+        .catch(error => {
+            showAlert('Error: ' + error.message, 'danger');
+            logActivity('✗ Error: ' + error.message);
+        });
+}
+
+// Auto-refrescar cada 30 segundos
+setInterval(() => {
+    logActivity('Refrescando datos...');
+    location.reload();
+}, 30000);
+</script>
+{% endblock %}
