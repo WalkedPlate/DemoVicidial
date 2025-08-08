@@ -35,9 +35,13 @@ class VicidialRealtime:
 
     def on_new_channel(self, event, manager):
         """Evento: Nuevo canal (llamada iniciando)"""
-        channel = event.get('Channel', '')
-        caller_id = event.get('CallerIDNum', '')
-        context = event.get('Context', '')
+        try:
+            channel = event['Channel'] if 'Channel' in event.headers else ''
+            caller_id = event['CallerIDNum'] if 'CallerIDNum' in event.headers else ''
+            context = event['Context'] if 'Context' in event.headers else ''
+        except Exception as e:
+            print(f"Error procesando evento Newchannel: {e}")
+            return
 
         # Solo procesar llamadas de agentes SIP
         if 'SIP/' in channel and caller_id:
@@ -59,8 +63,12 @@ class VicidialRealtime:
 
     def on_bridge(self, event, manager):
         """Evento: Llamada conectada (agente contestó)"""
-        channel1 = event.get('Channel1', '')
-        channel2 = event.get('Channel2', '')
+        try:
+            channel1 = event['Channel1'] if 'Channel1' in event.headers else ''
+            channel2 = event['Channel2'] if 'Channel2' in event.headers else ''
+        except Exception as e:
+            print(f"Error procesando evento Bridge: {e}")
+            return
 
         # Buscar cuál canal es del agente
         agent_channel = None
@@ -87,8 +95,12 @@ class VicidialRealtime:
 
     def on_hangup(self, event, manager):
         """Evento: Llamada terminada"""
-        channel = event.get('Channel', '')
-        cause = event.get('Cause', '')
+        try:
+            channel = event['Channel'] if 'Channel' in event.headers else ''
+            cause = event['Cause'] if 'Cause' in event.headers else ''
+        except Exception as e:
+            print(f"Error procesando evento Hangup: {e}")
+            return
 
         if channel in self.active_calls:
             call_info = self.active_calls[channel]
@@ -108,8 +120,12 @@ class VicidialRealtime:
 
     def on_queue_member_status(self, event, manager):
         """Evento: Cambio de estado en cola"""
-        interface = event.get('Interface', '')
-        status = event.get('Status', '')
+        try:
+            interface = event['Interface'] if 'Interface' in event.headers else ''
+            status = event['Status'] if 'Status' in event.headers else ''
+        except Exception as e:
+            print(f"Error procesando evento QueueMemberStatus: {e}")
+            return
 
         if 'SIP/' in interface:
             extension = interface.split('/')[1]

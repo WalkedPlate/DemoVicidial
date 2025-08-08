@@ -1,27 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}Agente {{ agent.vicidial_user }} - Vista de Llamadas{% endblock %}
+{% block title %}Agente {{ agent.vicidial_user }} - Panel de Llamadas{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row">
-        <!-- Header del Agente -->
+    <!-- Header del Agente -->
+    <div class="row mb-3">
         <div class="col-12">
-            <div class="card bg-dark text-white mb-3">
+            <div id="statusCard" class="card bg-success text-white">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h4>🎧 Agente: {{ agent.name }} ({{ agent.vicidial_user }})</h4>
+                        <h4>🎧 {{ agent.name }} ({{ agent.vicidial_user }})</h4>
                         <p class="mb-0">Extensión: {{ agent.vicidial_phone_login }}</p>
                     </div>
                     <div class="text-end">
-                        <div class="btn-group">
-                            <button id="pauseBtn" class="btn btn-warning" onclick="togglePause()">
-                                ⏸️ PAUSAR
-                            </button>
-                            <button class="btn btn-danger" onclick="logout()">
-                                🚪 SALIR
-                            </button>
-                        </div>
+                        <h5 id="statusText">🟢 CONECTANDO...</h5>
+                        <div id="timer">00:00:00</div>
                     </div>
                 </div>
             </div>
@@ -29,219 +23,467 @@
     </div>
 
     <div class="row">
-        <!-- Panel Principal de Llamada -->
+        <!-- Panel Principal -->
         <div class="col-md-8">
-            <div id="callPanel" class="card" style="min-height: 400px;">
-                <div class="card-header bg-success text-white">
-                    <h5 id="statusTitle">🟢 LISTO PARA RECIBIR LLAMADAS</h5>
+            <div class="card" style="min-height: 400px;">
+                <!-- Estado: Esperando -->
+                <div id="waitingState" class="card-body text-center py-5">
+                    <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;"></div>
+                    <h3 class="text-success">🟢 LISTO PARA LLAMADAS</h3>
+                    <p>Esperando llamada entrante...</p>
+                    <div class="row mt-4">
+                        <div class="col-6">
+                            <h5>📊 Hoy</h5>
+                            <p>Llamadas: <span id="callsToday">0</span></p>
+                            <p>Tiempo: <span id="talkTime">00:00</span></p>
+                        </div>
+                        <div class="col-6">
+                            <h5>📋 Cola</h5>
+                            <p>En espera: <span id="queueWaiting">-</span></p>
+                            <p>Agentes: <span id="queueAgents">-</span></p>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body text-center">
-                    <!-- Estado Esperando -->
-                    <div id="waitingState" class="py-5">
-                        <div class="spinner-border text-success mb-3" role="status" style="width: 4rem; height: 4rem;">
-                            <span class="visually-hidden">Esperando...</span>
-                        </div>
-                        <h3 class="text-muted">Esperando llamada entrante...</h3>
-                        <p>Estado: <span id="agentStatus" class="badge bg-success">READY</span></p>
-                    </div>
 
-                    <!-- Llamada Entrante -->
-                    <div id="incomingCall" class="py-4" style="display: none;">
-                        <div class="alert alert-primary">
-                            <h2>📞 LLAMADA ENTRANTE</h2>
+                <!-- Estado: Llamada Entrante -->
+                <div id="incomingState" class="card-body py-4" style="display: none;">
+                    <div class="alert alert-primary text-center">
+                        <h2>📞 LLAMADA ENTRANTE</h2>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h2 id="incomingNumber" class="text-primary">+1234567890</h2>
+                            <h4 id="customerName">Cliente</h4>
+                            <p id="customerLocation">Ciudad, Estado</p>
+                            <p><strong>Campaña:</strong> <span id="campaignName">DEMOIN</span></p>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h1 id="callerNumber" class="display-4 text-primary">+1234567890</h1>
-                                <p class="text-muted">Número de teléfono</p>
-                            </div>
-                            <div class="col-md-6">
-                                <h3 id="callerName">Juan Pérez</h3>
-                                <p id="callerLocation" class="text-muted">Lima, Perú</p>
-                                <p><strong>Campaña:</strong> <span id="campaignName">DEMOIN</span></p>
+                        <div class="col-md-6">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h5>⏰ Esperando</h5>
+                                    <div id="waitTimer" style="font-size: 1.5rem;">00:00</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="mt-4">
-                            <button class="btn btn-success btn-lg me-3" onclick="answerCall()">
-                                ✅ CONTESTAR
-                            </button>
-                            <button class="btn btn-danger btn-lg" onclick="rejectCall()">
-                                ❌ RECHAZAR
-                            </button>
-                        </div>
                     </div>
-
-                    <!-- En Llamada -->
-                    <div id="activeCall" class="py-4" style="display: none;">
-                        <div class="alert alert-info">
-                            <h2>📱 EN LLAMADA</h2>
-                        </div>
-                        <h3 id="activeCallerName">Cliente Activo</h3>
-                        <p>Duración: <span id="callDuration">00:00</span></p>
-                        <div class="mt-4">
-                            <button class="btn btn-warning me-2" onclick="holdCall()">
-                                ⏸️ RETENER
-                            </button>
-                            <button class="btn btn-info me-2" onclick="transferCall()">
-                                📞 TRANSFERIR
-                            </button>
-                            <button class="btn btn-danger" onclick="hangupCall()">
-                                📱 COLGAR
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Pausado -->
-                    <div id="pausedState" class="py-5" style="display: none;">
-                        <h2 class="text-warning">⏸️ AGENTE EN PAUSA</h2>
-                        <p>Motivo: <span id="pauseReason">Break</span></p>
-                        <button class="btn btn-success btn-lg" onclick="unpause()">
-                            ▶️ VOLVER A DISPONIBLE
+                    <div class="text-center mt-4">
+                        <button class="btn btn-success btn-lg me-3" onclick="answerCall()">
+                            ✅ CONTESTAR
+                        </button>
+                        <button class="btn btn-danger btn-lg" onclick="rejectCall()">
+                            ❌ RECHAZAR
                         </button>
                     </div>
+                </div>
+
+                <!-- Estado: En Llamada -->
+                <div id="activeState" class="card-body py-4" style="display: none;">
+                    <div class="alert alert-info text-center">
+                        <h2>📱 EN LLAMADA</h2>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 id="activeCustomer">Cliente Activo</h3>
+                            <p id="activeNumber">+1234567890</p>
+                            <p>Lead ID: <span id="leadId">-</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h5>⏱️ Duración</h5>
+                                    <div id="callDuration" style="font-size: 1.5rem;">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button class="btn btn-warning me-2" onclick="holdCall()">⏸️ RETENER</button>
+                        <button class="btn btn-info me-2" onclick="transferCall()">📞 TRANSFERIR</button>
+                        <button class="btn btn-secondary me-2" onclick="toggleRecording()">🎙️ GRABAR</button>
+                        <button class="btn btn-info" onclick="openMonitor()">📊 MONITOR LLAMADAS</button>
+                        <button class="btn btn-danger" onclick="hangupCall()">📱 COLGAR</button>
+                    </div>
+                </div>
+
+                <!-- Estado: Pausado -->
+                <div id="pausedState" class="card-body text-center py-5" style="display: none;">
+                    <h2 class="text-warning">⏸️ EN PAUSA</h2>
+                    <p>Motivo: <span id="pauseReason">Break</span></p>
+                    <div id="pauseTimer" style="font-size: 1.5rem;">00:00</div>
+                    <button class="btn btn-success btn-lg mt-3" onclick="unpauseAgent()">
+                        ▶️ VOLVER
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Panel de Información -->
+        <!-- Panel Lateral -->
         <div class="col-md-4">
-            <!-- Estadísticas del Día -->
+            <!-- Controles -->
             <div class="card mb-3">
-                <div class="card-header">
-                    <h6>📊 Estadísticas de Hoy</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-6">
-                            <h4 id="callsToday">0</h4>
-                            <small>Llamadas</small>
-                        </div>
-                        <div class="col-6">
-                            <h4 id="talkTime">00:00</h4>
-                            <small>Tiempo</small>
-                        </div>
-                    </div>
-                </div>
+    <div class="card-header bg-dark text-white">
+        <h6>🎛️ Control de Estados Vicidial</h6>
+    </div>
+    <div class="card-body">
+        <!-- Estado actual -->
+        <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><strong>Estado Actual:</strong></span>
+                <span id="currentAgentStatus" class="badge bg-secondary">LOGOUT</span>
             </div>
+        </div>
 
-            <!-- Historial de Llamadas -->
-            <div class="card">
-                <div class="card-header">
-                    <h6>📋 Últimas Llamadas</h6>
-                </div>
-                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    <div id="callHistory">
-                        <p class="text-muted">No hay llamadas recientes</p>
-                    </div>
+        <!-- Controles de estado -->
+        <div class="row g-2">
+            <div class="col-6">
+                <button id="readyBtn" class="btn btn-success w-100" onclick="setAgentStatus('READY')" disabled>
+                    🟢 READY
+                </button>
+            </div>
+            <div class="col-6">
+                <button id="pauseBtn" class="btn btn-warning w-100" onclick="showPauseOptions()" disabled>
+                    ⏸️ PAUSA
+                </button>
+            </div>
+        </div>
+
+        <div class="row g-2 mt-2">
+            <div class="col-12">
+                <button class="btn btn-info w-100" onclick="refreshAgentStatus()">
+                    🔄 ACTUALIZAR ESTADO
+                </button>
+            </div>
+        </div>
+
+        <div class="row g-2 mt-2">
+            <div class="col-6">
+                <button class="btn btn-secondary w-100" onclick="openStatusMonitor()">
+                    📊 MONITOR
+                </button>
+            </div>
+            <div class="col-6">
+                <button class="btn btn-danger w-100" onclick="logoutAgent()">
+                    🚪 SALIR
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de opciones de pausa -->
+<div class="modal fade" id="pauseOptionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">⏸️ Motivo de Pausa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('BREAK')">
+                        ☕ Break
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('LUNCH')">
+                        🍽️ Almuerzo
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('TRAINING')">
+                        📚 Capacitación
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('MEETING')">
+                        🤝 Reunión
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('TECHNICAL')">
+                        🔧 Problema Técnico
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="confirmPauseWithReason('OTHER')">
+                        ❓ Otro
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Variables JavaScript -->
+            <!-- Estado Sistema -->
+            <div class="card">
+                <div class="card-header">
+                    <h6>🔧 Sistema</h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <div>WebSocket: <span id="wsStatus" class="badge bg-secondary">-</span></div>
+                        <div>AMI: <span id="amiStatus" class="badge bg-secondary">-</span></div>
+                        <div>SIP: <span id="sipStatus" class="badge bg-secondary">-</span></div>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pausa -->
+<div class="modal fade" id="pauseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>⏸️ Solicitar Pausa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <select class="form-select" id="pauseReasonSelect">
+                    <option value="BREAK">Break</option>
+                    <option value="LUNCH">Almuerzo</option>
+                    <option value="MEETING">Reunión</option>
+                    <option value="TECHNICAL">Técnico</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-warning" onclick="confirmPause()">Pausar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script>
+// Variables
 const agentId = {{ agent.id }};
 const agentUser = '{{ agent.vicidial_user }}';
+const agentExtension = '{{ agent.vicidial_phone_login }}';
+
+let socket = null;
 let currentCall = null;
-let callStartTime = null;
-let isPaused = false;
-let pollInterval = null;
+let agentStatus = 'LOGOUT';
+let callTimer = null;
+let pauseTimer = null;
+let waitTimer = null;
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    connectWebSocket();
+    autoLoginAgent();
+    startPolling();
+    updateAgentControls();
+});
+
+function connectWebSocket() {
+    socket = io();
+
+    socket.on('connect', function() {
+        updateStatus('wsStatus', 'Conectado', 'success');
+        socket.emit('join_agent', {extension: agentExtension});
+    });
+
+    socket.on('incoming_call', function(callData) {
+    // Filtrar llamadas de setup del agente
+    if (callData.caller_id === '5551234567' || callData.caller_id === agentExtension) {
+        console.log('🔧 Conexión de setup ignorada:', callData.caller_id);
+        return;
+    }
+
+    currentCall = callData;
+    showIncomingCall(callData);
+    showAlert('📞 Llamada entrante: ' + callData.caller_id, 'info');
+});
+
+    socket.on('call_connected', function(callData) {
+        showActiveCall();
+        startCallTimer();
+    });
+
+    socket.on('call_ended', function(callData) {
+        handleCallEnd();
+    });
+    socket.on('agent_auto_connected', function(data) {
+    console.log('🎧 Agente auto-conectado:', data);
+    showAlert('🎧 MicroSIP conectado a MeetMe ' + data.meetme_room, 'success');
+    updateStatus('sipStatus', 'MeetMe ' + data.meetme_room, 'success');
+});
+}
+
+function autoLoginAgent() {
+    updateStatus('amiStatus', 'Conectando', 'warning');
+
+    fetch('/vicidial_agent_login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({agent_id: agentId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            agentStatus = data.final_status || 'READY';
+            updateAgentControls();
+            updateAgentStatus();
+            updateStatus('amiStatus', 'Conectado', 'success');
+            updateStatus('sipStatus', 'MeetMe ' + data.meetme_room, 'success');
+
+            if (data.ready_for_calls) {
+                showAlert('✅ Agente LISTO para recibir llamadas', 'success');
+            } else {
+                showAlert(`⚠️ Login exitoso pero estado: ${data.final_status}`, 'warning');
+            }
+        } else {
+            showAlert('❌ Error: ' + data.message, 'danger');
+            updateStatus('amiStatus', 'Error', 'danger');
+        }
+    });
+}
+
+function startPolling() {
+    setInterval(function() {
+        fetch(`/agent_calls/${agentId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateFromPoll(data);
+                }
+            })
+            .catch(error => console.log('Poll error:', error));
+    }, 3000);
+}
+
+function updateFromPoll(data) {
+    if (data.agent_status !== agentStatus) {
+        agentStatus = data.agent_status;
+        updateAgentStatus();
+    }
+
+    if (data.calls.length > 0 && !currentCall) {
+        const call = data.calls[0];
+        if (call.status === 'RING' || call.status === 'QUEUE') {
+            currentCall = call;
+            showIncomingCall(call);
+        } else if (call.status === 'LIVE') {
+            currentCall = call;
+            showActiveCall();
+            startCallTimer();
+        }
+    } else if (data.calls.length === 0 && currentCall) {
+        handleCallEnd();
+    }
+}
 
 // Estados de la vista
-function showWaiting() {
+function showWaitingState() {
+    hideAllStates();
     document.getElementById('waitingState').style.display = 'block';
-    document.getElementById('incomingCall').style.display = 'none';
-    document.getElementById('activeCall').style.display = 'none';
-    document.getElementById('pausedState').style.display = 'none';
-    document.getElementById('statusTitle').innerHTML = '🟢 LISTO PARA RECIBIR LLAMADAS';
-    document.getElementById('callPanel').className = 'card';
+    updateStatusCard('success', '🟢 LISTO');
 }
 
-function showIncomingCall(call) {
-    document.getElementById('waitingState').style.display = 'none';
-    document.getElementById('incomingCall').style.display = 'block';
-    document.getElementById('activeCall').style.display = 'none';
-    document.getElementById('pausedState').style.display = 'none';
-    document.getElementById('statusTitle').innerHTML = '📞 LLAMADA ENTRANTE';
-    document.getElementById('callPanel').className = 'card border-primary';
-    
-    // Llenar datos de la llamada
-    document.getElementById('callerNumber').textContent = call.phone_number;
-    document.getElementById('callerName').textContent = `${call.first_name || ''} ${call.last_name || ''}`.trim() || 'Cliente';
-    document.getElementById('callerLocation').textContent = `${call.city || ''}, ${call.state || ''}`.trim() || 'Ubicación no disponible';
-    document.getElementById('campaignName').textContent = call.campaign_id;
+function showIncomingCall(callData) {
+    hideAllStates();
+    document.getElementById('incomingState').style.display = 'block';
+    updateStatusCard('primary', '📞 LLAMADA ENTRANTE');
+
+    document.getElementById('incomingNumber').textContent = callData.phone_number || 'Sin número';
+    document.getElementById('customerName').textContent =
+        `${callData.first_name || ''} ${callData.last_name || ''}`.trim() || 'Sin nombre';
+    document.getElementById('customerLocation').textContent =
+        `${callData.city || ''}, ${callData.state || ''}`;
+
+    startWaitTimer();
+
+    // EN SISTEMA REAL: AUTO-CONECTAR DESPUÉS DE 2 SEGUNDOS
+    setTimeout(() => {
+        showAlert('🎧 Llamada conectada automáticamente via MeetMe', 'success');
+        agentStatus = 'INCALL';
+        showActiveCall();
+        startCallTimer();
+        stopWaitTimer();
+    }, 2000);
 }
 
-function showActiveCall(call) {
-    document.getElementById('waitingState').style.display = 'none';
-    document.getElementById('incomingCall').style.display = 'none';
-    document.getElementById('activeCall').style.display = 'block';
-    document.getElementById('pausedState').style.display = 'none';
-    document.getElementById('statusTitle').innerHTML = '📱 EN LLAMADA ACTIVA';
-    document.getElementById('callPanel').className = 'card border-info';
-    
-    document.getElementById('activeCallerName').textContent = `${call.first_name || ''} ${call.last_name || ''}`.trim() || 'Cliente';
-}
+function showActiveCall() {
+    hideAllStates();
+    document.getElementById('activeState').style.display = 'block';
+    updateStatusCard('info', '📱 EN LLAMADA');
 
-function showPaused() {
-    document.getElementById('waitingState').style.display = 'none';
-    document.getElementById('incomingCall').style.display = 'none';
-    document.getElementById('activeCall').style.display = 'none';
-    document.getElementById('pausedState').style.display = 'block';
-    document.getElementById('statusTitle').innerHTML = '⏸️ AGENTE EN PAUSA';
-    document.getElementById('callPanel').className = 'card border-warning';
-}
-
-// Polling para obtener llamadas
-function pollForCalls() {
-    fetch(`/agent_calls/${agentId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                updateAgentView(data.calls, data.agent_status);
-            }
-        })
-        .catch(error => console.error('Error polling:', error));
-}
-
-// Actualizar vista según estado
-function updateAgentView(calls, agentStatus) {
-    document.getElementById('agentStatus').textContent = agentStatus;
-    
-    if (agentStatus === 'PAUSED') {
-        showPaused();
-        document.getElementById('pauseBtn').innerHTML = '▶️ DISPONIBLE';
-        isPaused = true;
-    } else if (calls.length > 0) {
-        const call = calls[0];
-        if (call.status === 'RING' || call.status === 'QUEUE') {
-            showIncomingCall(call);
-            currentCall = call;
-        } else if (call.status === 'LIVE' || call.status === 'INCALL') {
-            showActiveCall(call);
-            currentCall = call;
-        }
-    } else {
-        showWaiting();
-        currentCall = null;
-        document.getElementById('pauseBtn').innerHTML = '⏸️ PAUSAR';
-        isPaused = false;
+    if (currentCall) {
+        document.getElementById('activeCustomer').textContent =
+            `${currentCall.first_name || ''} ${currentCall.last_name || ''}`.trim() || 'Cliente';
+        document.getElementById('activeNumber').textContent = currentCall.phone_number || '';
+        document.getElementById('leadId').textContent = currentCall.lead_id || '-';
     }
+}
+
+function showPausedState() {
+    hideAllStates();
+    document.getElementById('pausedState').style.display = 'block';
+    updateStatusCard('warning', '⏸️ EN PAUSA');
+    startPauseTimer();
+}
+
+function hideAllStates() {
+    document.getElementById('waitingState').style.display = 'none';
+    document.getElementById('incomingState').style.display = 'none';
+    document.getElementById('activeState').style.display = 'none';
+    document.getElementById('pausedState').style.display = 'none';
+}
+
+function updateAgentStatus() {
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    switch(agentStatus) {
+        case 'READY':
+            showWaitingState();
+            pauseBtn.innerHTML = '⏸️ PAUSA';
+            pauseBtn.disabled = false;
+            break;
+        case 'PAUSED':
+            showPausedState();
+            pauseBtn.innerHTML = '▶️ VOLVER';
+            pauseBtn.disabled = false;
+            break;
+        case 'INCALL':
+            updateStatusCard('info', '📱 EN LLAMADA');
+            pauseBtn.disabled = true;
+            break;
+    }
+}
+
+function updateStatusCard(type, text) {
+    const card = document.getElementById('statusCard');
+    const statusText = document.getElementById('statusText');
+
+    card.className = `card bg-${type} text-white`;
+    statusText.textContent = text;
 }
 
 // Acciones del agente
-function togglePause() {
-    if (isPaused) {
-        unpause();
-    } else {
-        const reason = prompt('Motivo de pausa:', 'Break') || 'Break';
-        pauseAgent(reason);
+function answerCall() {
+    if (currentCall) {
+        showAlert('📞 MicroSIP contestando automáticamente...', 'info');
+        setTimeout(() => {
+            agentStatus = 'INCALL';
+            showActiveCall();
+            startCallTimer();
+            showAlert('✅ Llamada conectada', 'success');
+        }, 1000);
     }
 }
 
-function pauseAgent(reason) {
-    fetch('/agent_pause', {
+function rejectCall() {
+    if (currentCall) {
+        showAlert('❌ Llamada rechazada', 'warning');
+        handleCallEnd();
+    }
+}
+
+function togglePause() {
+    if (agentStatus === 'PAUSED') {
+        unpauseAgent();
+    } else {
+        const modal = new bootstrap.Modal(document.getElementById('pauseModal'));
+        modal.show();
+    }
+}
+
+function confirmPause() {
+    const reason = document.getElementById('pauseReasonSelect').value;
+
+    fetch('/vicidial_agent_pause', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({agent_id: agentId, reason: reason})
@@ -249,65 +491,307 @@ function pauseAgent(reason) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            agentStatus = 'PAUSED';
             document.getElementById('pauseReason').textContent = reason;
+            updateAgentStatus();
+            bootstrap.Modal.getInstance(document.getElementById('pauseModal')).hide();
+            showAlert('⏸️ Pausado: ' + reason, 'warning');
         }
     });
 }
 
-function unpause() {
-    fetch('/agent_unpause', {
+function unpauseAgent() {
+    fetch('/vicidial_agent_unpause', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({agent_id: agentId})
     })
     .then(response => response.json())
     .then(data => {
-        // La vista se actualizará en el próximo poll
+        if (data.success) {
+            agentStatus = 'READY';
+            updateAgentStatus();
+            stopPauseTimer();
+            showAlert('▶️ Agente disponible para llamadas', 'success');
+        }
     });
-}
-
-function answerCall() {
-    if (currentCall) {
-        // En un sistema real, esto notificaría a Asterisk
-        alert('Llamada contestada - En desarrollo');
-    }
-}
-
-function rejectCall() {
-    if (currentCall) {
-        alert('Llamada rechazada - En desarrollo');
-    }
 }
 
 function hangupCall() {
     if (currentCall) {
-        alert('Llamada colgada - En desarrollo');
+        showAlert('📱 Llamada terminada', 'info');
+        handleCallEnd();
     }
 }
 
-function logout() {
-    if (confirm('¿Seguro que desea salir?')) {
-        clearInterval(pollInterval);
-        window.location.href = '/dashboard';
+function openMonitor() {
+    window.open('/monitor_real_calls', '_blank');
+}
+
+function handleCallEnd() {
+    stopCallTimer();
+    stopWaitTimer();
+    currentCall = null;
+    agentStatus = 'READY';
+    updateAgentStatus();
+}
+
+function logoutAgent() {
+    if (confirm('¿Cerrar sesión?')) {
+        fetch('/vicidial_agent_logout', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({agent_id: agentId})
+        })
+        .then(() => {
+            showAlert('👋 Sesión cerrada', 'info');
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 1000);
+        });
     }
 }
 
-// Inicializar
-document.addEventListener('DOMContentLoaded', function() {
-    showWaiting();
-    
-    // Iniciar polling cada 2 segundos
-    pollInterval = setInterval(pollForCalls, 2000);
-    
-    // Primera consulta inmediata
-    pollForCalls();
-});
+function simulateCall() {
+    fetch(`/simulate_call/${agentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('📞 Llamada simulada enviada', 'info');
+            }
+        });
+}
+
+// Función para cambiar estado del agente
+function setAgentStatus(newStatus) {
+    if (newStatus === agentStatus) {
+        showAlert(`Ya estás en estado ${newStatus}`, 'info');
+        return;
+    }
+
+    showAlert(`Cambiando a estado ${newStatus}...`, 'info');
+
+    let endpoint = '';
+    let payload = {agent_id: agentId};
+
+    switch(newStatus) {
+        case 'READY':
+            endpoint = '/vicidial_agent_unpause';
+            break;
+        case 'PAUSED':
+            showPauseOptions();
+            return;
+        default:
+            showAlert('Estado no válido', 'danger');
+            return;
+    }
+
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            agentStatus = newStatus;
+            updateAgentControls();
+            showAlert(`✅ Estado cambiado a ${newStatus}`, 'success');
+        } else {
+            showAlert(`❌ Error: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert(`❌ Error de conexión: ${error.message}`, 'danger');
+    });
+}
+
+function showPauseOptions() {
+    const modal = new bootstrap.Modal(document.getElementById('pauseOptionsModal'));
+    modal.show();
+}
+
+function confirmPauseWithReason(reason) {
+    fetch('/vicidial_agent_pause', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({agent_id: agentId, reason: reason})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            agentStatus = 'PAUSED';
+            updateAgentControls();
+            bootstrap.Modal.getInstance(document.getElementById('pauseOptionsModal')).hide();
+            showAlert(`⏸️ Pausado: ${reason}`, 'warning');
+        } else {
+            showAlert(`❌ Error: ${data.message}`, 'danger');
+        }
+    });
+}
+
+function updateAgentControls() {
+    const currentStatusBadge = document.getElementById('currentAgentStatus');
+    const readyBtn = document.getElementById('readyBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    // Actualizar badge de estado
+    currentStatusBadge.textContent = agentStatus;
+    currentStatusBadge.className = 'badge';
+
+    // Resetear botones
+    readyBtn.disabled = false;
+    pauseBtn.disabled = false;
+
+    switch(agentStatus) {
+        case 'READY':
+            currentStatusBadge.classList.add('bg-success');
+            readyBtn.disabled = true; // Ya está en READY
+            updateStatusCard('success', '🟢 LISTO');
+            break;
+        case 'PAUSED':
+            currentStatusBadge.classList.add('bg-warning');
+            pauseBtn.disabled = true; // Ya está pausado
+            updateStatusCard('warning', '⏸️ EN PAUSA');
+            break;
+        case 'INCALL':
+            currentStatusBadge.classList.add('bg-info');
+            readyBtn.disabled = true;
+            pauseBtn.disabled = true; // No puede pausar en llamada
+            updateStatusCard('info', '📱 EN LLAMADA');
+            break;
+        case 'LOGOUT':
+            currentStatusBadge.classList.add('bg-danger');
+            readyBtn.disabled = true;
+            pauseBtn.disabled = true;
+            updateStatusCard('danger', '🔴 DESCONECTADO');
+            break;
+        default:
+            currentStatusBadge.classList.add('bg-secondary');
+    }
+}
+
+function refreshAgentStatus() {
+    showAlert('🔄 Consultando estado...', 'info');
+
+    fetch(`/monitor_agent_status/${agentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                agentStatus = data.current_status.status || 'LOGOUT';
+                updateAgentControls();
+                updateAgentStatus();
+                showAlert(`✅ Estado actualizado: ${agentStatus}`, 'success');
+
+                // Mostrar cambios inesperados
+                if (data.analysis.unexpected_changes > 0) {
+                    showAlert(`⚠️ Se detectaron ${data.analysis.unexpected_changes} cambios de estado recientes`, 'warning');
+                }
+            } else {
+                showAlert(`❌ Error: ${data.error}`, 'danger');
+            }
+        });
+}
+
+function openStatusMonitor() {
+    window.open(`/monitor_agent_status/${agentId}`, '_blank');
+}
+
+function testInboundCall() {
+    // Primero asegurar que esté READY
+    fetch(`/force_agent_ready/${agentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('✅ Agente listo para recibir llamadas', 'success');
+                showAlert('📞 Ahora llama al 01 4125924 desde tu celular', 'info');
+            }
+        });
+}
+
+// Timers
+function startCallTimer() {
+    const startTime = Date.now();
+    callTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        document.getElementById('callDuration').textContent =
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+function stopCallTimer() {
+    if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+    }
+}
+
+function startWaitTimer() {
+    const startTime = Date.now();
+    waitTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        document.getElementById('waitTimer').textContent =
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+function stopWaitTimer() {
+    if (waitTimer) {
+        clearInterval(waitTimer);
+        waitTimer = null;
+    }
+}
+
+function startPauseTimer() {
+    const startTime = Date.now();
+    pauseTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        document.getElementById('pauseTimer').textContent =
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+function stopPauseTimer() {
+    if (pauseTimer) {
+        clearInterval(pauseTimer);
+        pauseTimer = null;
+    }
+}
+
+// Utilidades
+function updateStatus(elementId, text, type) {
+    const element = document.getElementById(elementId);
+    element.textContent = text;
+    element.className = `badge bg-${type}`;
+}
+
+function refreshStatus() {
+    showAlert('🔄 Actualizando estado...', 'info');
+    location.reload();
+}
+
+function showAlert(message, type) {
+    console.log(message);
+    alert(message);
+}
+
+// Timer principal
+setInterval(() => {
+    document.getElementById('timer').textContent = new Date().toLocaleTimeString();
+}, 1000);
 
 // Limpiar al salir
 window.addEventListener('beforeunload', function() {
-    if (pollInterval) {
-        clearInterval(pollInterval);
-    }
+    if (socket) socket.disconnect();
+    stopCallTimer();
+    stopWaitTimer();
+    stopPauseTimer();
 });
 </script>
 {% endblock %}

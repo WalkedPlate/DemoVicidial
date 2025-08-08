@@ -49,7 +49,13 @@ class VicidialAMI:
 
         # Log de eventos importantes
         if event_name in ['Newchannel', 'Hangup', 'AgentConnect', 'QueueMemberStatus']:
-            print(f"📡 Evento AMI: {event_name} - {dict(event)}")
+            try:
+                event_data = {}
+                for key in event.headers:
+                    event_data[key] = event[key]
+                print(f"📡 Evento AMI: {event_name} - {event_data}")
+            except Exception as e:
+                print(f"📡 Evento AMI: {event_name} - Error parsing: {e}")
 
     def register_event_callback(self, event_name, callback):
         """Registrar callback para evento específico"""
